@@ -9,6 +9,7 @@ SOURCE_BUCKET = os.environ["SOURCE_BUCKET"]
 SOURCE_ENDPOINT = os.environ["SOURCE_ENDPOINT"]
 SOURCE_REGION = os.environ["SOURCE_REGION"]
 DESTINATION = Path(os.environ.get("DESTINATION", "/workspace")).resolve()
+SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX", "heartlib/")
 
 
 def main():
@@ -23,7 +24,7 @@ def main():
     copied = 0
     copied_bytes = 0
 
-    for page in paginator.paginate(Bucket=SOURCE_BUCKET):
+    for page in paginator.paginate(Bucket=SOURCE_BUCKET, Prefix=SOURCE_PREFIX):
         for item in page.get("Contents", []):
             key = item["Key"]
             target = (DESTINATION / key).resolve()
