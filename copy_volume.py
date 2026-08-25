@@ -3,13 +3,20 @@ import os
 from pathlib import Path
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 SOURCE_BUCKET = os.environ["SOURCE_BUCKET"]
 SOURCE_ENDPOINT = os.environ["SOURCE_ENDPOINT"]
 SOURCE_REGION = os.environ["SOURCE_REGION"]
 DESTINATION = Path(os.environ.get("DESTINATION", "/workspace")).resolve()
-SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX", "heartlib/")
+SOURCE_PREFIXES = [
+    value.strip()
+    for value in os.environ.get(
+        "SOURCE_PREFIXES", "heartlib/ckpt/,heartlib/src/,heartlib/pyproject.toml"
+    ).split(",")
+    if value.strip()
+]
 
 
 def main():
@@ -24,7 +31,9 @@ def main():
     copied = 0
     copied_bytes = 0
 
-    for page in paginator.paginate(Bucket=SOURCE_BUCKET, Prefix=SOURCE_PREFIX):
+    skipped = []
+    for source_prefix in SOURCE_PREFIXES:
+      for page in paginator.paginate(Bucket=SOURCE_BUCKET, Prefix=source_prefix):
         for item in page.get("Contents", []):
             key = item["Key"]
             target = (DESTINATION / key).resolve()
@@ -39,14 +48,27 @@ def main():
                 copied += 1
                 copied_bytes += expected
                 continue
-            client.download_file(SOURCE_BUCKET, key, str(target))
+            try:
+                client.download_file(SOURCE_BUCKET, key, str(target))
+            except ClientError as exc:
+                if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+                    skipped.append(key)
+                    print(f"skipped unavailable object: {key}", flush=True)
+                    continue
+                raise
             if target.stat().st_size != expected:
                 raise RuntimeError(f"Size mismatch after copying {key}")
             copied += 1
             copied_bytes += expected
             print(f"copied {copied}: {key} ({expected} bytes)", flush=True)
 
-    result = {"objects": copied, "bytes": copied_bytes, "source": SOURCE_BUCKET}
+    result = {
+        "objects": copied,
+        "bytes": copied_bytes,
+        "source": SOURCE_BUCKET,
+        "prefixes": SOURCE_PREFIXES,
+        "skipped": skipped,
+    }
     (DESTINATION / ".migration-complete.json").write_text(
         json.dumps(result, sort_keys=True), encoding="utf-8"
     )
