@@ -1,0 +1,10 @@
+{
+  "input": {
+    "lyrics": "[Verse]\nVi bygger vores egen sang\n[Chorus]\nMusikken spiller natten lang",
+    "tags": "Danish pop, uplifting, male vocal",
+    "duration_seconds": 30,
+    "topk": 50,
+    "temperature": 1.0,
+    "cfg_scale": 1.5
+  }
+}
